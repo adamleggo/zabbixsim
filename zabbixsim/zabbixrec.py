@@ -26,6 +26,11 @@ if __name__ == "__main__":
         default=None
         )
     parser.add_argument(
+        "--https", type=str,
+        help="Server supports TLS [true|false]",
+        default=None
+        )
+    parser.add_argument(
         "--username", type=str,
         help="Zabbix API username",
         default=None
@@ -48,22 +53,29 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read(DEFAULTS)
     cfg_server = config.get('SETTINGS', 'server')
+    cfg_https = config.getboolean('SETTINGS', 'https')
     cfg_username = config.get('SETTINGS', 'username')
     cfg_password = config.get('SETTINGS', 'password')
     cfg_hostname = config.get('SETTINGS', 'hostname')
 
     # Parse parameter overrides specified as command line arguments.
     argvs_server = argvs.server
+    argvs_https = argvs.https
     argvs_username = argvs.username
     argvs_password = argvs.password
     argvs_hostname = argvs.hostname
 
     # Bind reference to final parameter values.
     server   = argvs_server if argvs_server else cfg_server
+    https = (argvs_https.lower() == 'true') if argvs_https else cfg_https
     username = argvs_username if argvs_username else cfg_username
     password = argvs_password if argvs_password else cfg_password
     hostname = argvs_hostname if argvs_hostname else cfg_hostname
-    zapi = zabbix_api.ZabbixAPI(server=server + "/zabbix")
+    print(https)
+    if https:
+        zapi = zabbix_api.ZabbixAPI(server="https://" + server + "/zabbix")
+    else:
+        zapi = zabbix_api.ZabbixAPI(server="http://" + server + "/zabbix")
     zapi.login(username, password)
 
     # Get the host
