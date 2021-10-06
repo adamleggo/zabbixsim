@@ -15,104 +15,109 @@ import tkinter as tk
 from tkinter import ttk
 import yaml
 
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
-ACTIVE_PORT = 10051
-#ACTIVE_PORT = 10050
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+ZABBIX_ACTIVE_PORT = 10051
+#ZABBIX_ACTIVE_PORT = 10050
+ZABBIX_REFRESH_ACTIVE_CHECKS = 120
+ZABBIX_SEND_ACTIVE = 5
 
 class ZabbixActive():
     """ZabbixActive"""
-    session_num = random.getrandbits(64)
+    # Generate a random 32 character number for the session id
+    session_num= random.randrange(1, 10**32)
 
     server = ""
+    active_data = {}
 
-    def __init__(self, server):
-        print("ZabbixActive")
+    def __init__(self, server: str, active_data: dict):
+        logging.debug("ZabbixActive")
         self.server = server
+        self.active_data = active_data
 
-    def send_message(self, data):
+    def send_message(self, data: dict):
         '''Send the message to the Zabbix server'''
         active_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        active_socket.connect(self.server, ACTIVE_PORT)
-        logging.debug('packet %s', data)
-        active_socket.sendall(data)
-        data = active_socket.recv(10000)
-        active_socket.close()
-        # Print the received message
-        receive_message = data[13:]
-        parsed = json.loads(receive_message)
-        logging.debug(parsed["response"])
-        return parsed
+        active_socket.connect((self.server, ZABBIX_ACTIVE_PORT))
+        logging.info('packet %s', data)
 
-
-    def active_checks(self, host_check: str):
-        '''Query the Zabbix server for an active check'''
-        data = dict(request="active checks", host=host_check)
+        # Generate the zabbix formatted message
         json_data = json.dumps(data, sort_keys=False)
         logging.debug("data %s", json_data)
-        packet = b'ZBXD\1' + struct.pack('<Q', len(json_data)) + json_data.encode("utf-8")
-        logging.debug("packet %s", packet)
-        received_data = self.send_message(packet)
+        packet_send = b'ZBXD\1' + struct.pack('<Q', len(json_data)) + json_data.encode("utf-8")
+        logging.debug("packet %s", packet_send)
 
-        logging.debug(received_data)
+        # send the message and receive the response
+        active_socket.sendall(packet_send)
+        packet_receive = active_socket.recv(10000)
+        active_socket.close()
+
+        # Print the received message
+        receive_message = packet_receive[13:]
+        parsed = json.loads(receive_message)
+        logging.info(parsed["response"])
+        return parsed
+
+    def refresh_checks(self, host_check: str):
+        '''Query the Zabbix server for an active check'''
+        active_check_msg = dict(request="active checks", host=host_check)
+        received_data = self.send_message(active_check_msg)
+
         for value in received_data["data"]:
             logging.debug( "%s %s", str(value["key"]), str(value["delay"]))
         return received_data["data"]
 
 
-    def agent_data(self, config):
+    def agent_data(self, hostname :str, host_data :dict):
         '''Process the active agent data'''
         logging.debug("agent_data")
         epoch_time = int(time.time())
 
-        item_id = 1
-        # Send data for each host
-        data_list = []
-        for host in config.sections():
-            if host != 'SYSTEM':
-                metrics = config.items(host)
-                logging.info(metrics)
-                # Send metrics to Zabbix
-                for key, value in metrics:
-                    item_data = dict(host=host,
-                                    key=key,
-                                    value=value,
-                                    id=item_id,
-                                    clock=epoch_time,
-                                    ns=0)
-                    data_list.append(item_data)
+        # Send active data for each host
+        if host_data:
+            item_id = 1
+            item_data_list = []
+            for item in host_data:
+                # Send the data when the current delay has been reset
+                if item['current_delay'] == item['delay']:
+                    item_data = dict(host=hostname,
+                                key=item['key_'],
+                                value=item['lastvalue'],
+                                id=item_id,
+                                clock=epoch_time,
+                                ns=0)
+                    item_data_list.append(item_data)
                     item_id += 1
-                    logging.debug(item_data)
 
-        data = dict(request="agent data",
-                    session=self.session_num,
-                    clock=epoch_time,
-                    ns=0,
-                    data=data_list)
-        logging.debug(data)
-        json_data = json.dumps(data, sort_keys=False, indent=2)
-        logging.debug("data %s", json_data)
-        packet = b'ZBXD\1' + struct.pack('<Q', len(json_data)) + json_data.encode("utf-8")
-        received_data = self.send_message(packet)
+        # Check if any data to send
+        if len(item_data_list) > 0:
+            agent_data_msg = dict(request="agent data",
+                        session=f'{self.session_num:032}',
+                        clock=epoch_time,
+                        ns=0,
+                        data=item_data_list)
+            logging.debug(agent_data_msg)
+            received_data = self.send_message(agent_data_msg)
 
-        logging.debug(received_data["info"])
-        self.session_num += 1
+            logging.debug(received_data["info"])
+            self.session_num += 1
 
 #class ZabbixPassive():
 #    def __init__(self):
-#        print("ZabbixPassive")
+#        logging.info("ZabbixPassive")
 
 class ZabbixSim(tk.Tk):
     """ZabbixSim"""
 
     # pylint: disable=too-many-instance-attributes
-#    server = ""
-#    hostname = ""
-    sim_data = {}
+    active_data = {}
+    passive_data = {}
     hostnames = []
     agent_types = []
     item_names = []
     item_keys = []
     current_item = {}
+
+    zabbix_active = None
 
     def __init__(self):
         """ZabbixSim init"""
@@ -121,6 +126,7 @@ class ZabbixSim(tk.Tk):
         self.title('Zabbix Agent Simulator')
 
         self.init_sim_data()
+        self.zabbix_active = ZabbixActive(self.server, self.active_data)
 
         # set up option menu variables
         self.option_var = tk.StringVar(self)
@@ -140,7 +146,7 @@ class ZabbixSim(tk.Tk):
         # Get Python Config parser
         config = configparser.ConfigParser()
         default_config = "zabbixsim.cfg"
-        logging.info('ConfigPath = %s', default_config)
+        logging.debug('ConfigPath = %s', default_config)
         logging.basicConfig(level=logging.INFO)
 
         config.read(default_config)
@@ -150,26 +156,39 @@ class ZabbixSim(tk.Tk):
 
         # Load the recorded items as yaml
         with open(self.hostname + '.yaml', encoding="utf8") as file:
-            self.sim_data = yaml.load(file, Loader=yaml.Loader)
+            loaded_data = yaml.load(file, Loader=yaml.Loader)
+
+        # Add current_delay key to dictionary
+        for hostname in loaded_data:
+            if loaded_data[hostname]['active']:
+                self.active_data[hostname] = []
+                for item in loaded_data[hostname]['active']:
+                    item['current_delay'] = item['delay']
+                    self.active_data[hostname].append(item)
+
+            if loaded_data[hostname]['passive']:
+                self.passive_data[hostname] = []
+                for item in loaded_data[hostname]['passive']:
+                    self.passive_data[hostname].append(item)
 
         # Load the hostnames
-        for hostname in self.sim_data:
+        for hostname in loaded_data:
             self.hostnames.append(hostname)
 
         self.current_hostname = self.hostnames[0]
 
         # Load the agent types
-        for agent_type in self.sim_data[self.current_hostname]:
+        for agent_type in loaded_data[self.current_hostname]:
             self.agent_types.append(agent_type)
 
         self.current_type = self.agent_types[0]
 
         # Load the items
-        for item in self.sim_data[self.current_hostname][self.current_type]:
+        for item in loaded_data[self.current_hostname][self.current_type]:
             self.item_names.append(item['name'])
             self.item_keys.append(item['key_'])
 
-        self.current_item = self.sim_data[self.current_hostname][self.current_type][0]
+        self.current_item = loaded_data[self.current_hostname][self.current_type][0]
         self.current_name = self.current_item['name']
         self.current_key = self.current_item['key_']
 
@@ -183,16 +202,16 @@ class ZabbixSim(tk.Tk):
         self.item_names = []
         self.item_keys = []
         #for type in self.sim_data[self.option_hostname.get()]:
-        #    print(hostname)
+        #    logging.info(hostname)
         #    self.hostnames.append(hostname)
 
         #hostname_default = tk.StringVar(self)
         #hostname_default.set(hostnames[0]) # default value
 
         #for item in host_items[hostname]['active']:
-        #    print(item)
-        #    print(item['name'])
-        #    print(item['key_'])
+        #    logging.info(item)
+        #    logging.info(item['name'])
+        #    logging.info(item['key_'])
         #    item_names.append(item['name'])
         #    item_keys.append(item['key_'])
 
@@ -200,6 +219,8 @@ class ZabbixSim(tk.Tk):
         #self.item_name_default.set(item_names[0]) # default value
 
     def create_wigets(self):
+        # pylint: disable=too-many-locals
+
         """Create wigets"""
         # padding for widgets using the grid layout
         paddings = {'padx': 5, 'pady': 5}
@@ -277,31 +298,63 @@ class ZabbixSim(tk.Tk):
         btn_apply = ttk.Button(self, text='Apply', command=self.apply)
         btn_apply.grid(column=2, row=5, sticky=tk.W, **paddings)
 
+        # refresh checks and send active data
+        for hostname, data_items in self.active_data.items():
+            self.zabbix_active.refresh_checks(hostname)
+            self.zabbix_active.agent_data(hostname, data_items)
+
+        # Start timers
+        self.after(ZABBIX_REFRESH_ACTIVE_CHECKS * 1000, self.refresh_active_checks)
+        self.after(ZABBIX_SEND_ACTIVE * 1000, self.send_active_data)
+
     def changed_hostname(self, hostname):
         """hostname changed"""
-        print(hostname)
+        # pylint: disable=no-self-use
+        logging.info(hostname)
 
     def changed_agent_type(self, agent_type):
         """agent type changed"""
-        print(agent_type)
+        # pylint: disable=no-self-use
+        logging.info(agent_type)
 
     def changed_item_name(self, item_name):
         """item name changed"""
-        print(item_name)
+        # pylint: disable=no-self-use
+        logging.info(item_name)
 
     def changed_item_key(self, item_key):
         """item key changed"""
-        print(item_key)
+        # pylint: disable=no-self-use
+        logging.info(item_key)
 
     def apply(self):
         """Apply the change in value and send update"""
-        print("Apply pressed")
+        # pylint: disable=no-self-use
+        logging.info("Apply pressed")
 
-    @classmethod
-    def send_active_data(cls): #, *args):
+    def refresh_active_checks(self, *args):
+        """Refresh active checks"""
+        logging.debug('refresh active checks')
+        for arg in args:
+            logging.info(arg)
+        for hostname in self.active_data:
+            self.zabbix_active.refresh_checks(hostname)
+        self.after(ZABBIX_REFRESH_ACTIVE_CHECKS * 1000, self.refresh_active_checks)
+
+    def send_active_data(self):
         """Send active data"""
-        print('send active data')
-        # my_button.after(5000, self.send_active_data)
+        logging.info('send active data')
+        for hostname, item_data in self.active_data.items():
+            for item in item_data:
+                # Update the current delay, so data is sent after the proper delay
+                if item['current_delay'] <= 0:
+                    item['current_delay'] = \
+                        item['delay']
+                else:
+                    item['current_delay'] = \
+                        item['current_delay'] - int(ZABBIX_SEND_ACTIVE)
+            self.zabbix_active.agent_data(hostname, item_data)
+        self.after(ZABBIX_SEND_ACTIVE * 1000, self.send_active_data)
 
 
 if __name__ == "__main__":
