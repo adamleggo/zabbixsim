@@ -5,12 +5,14 @@
 
 """System modules"""
 import configparser
-import socket
 import json
-import struct
 import logging
-import time
+import os
 import random
+import socket
+import struct
+import sys
+import time
 import tkinter as tk
 from tkinter import ttk
 import yaml
@@ -125,6 +127,7 @@ class ZabbixSim(tk.Tk):
         self.geometry("400x250")
         self.title('Zabbix Agent Simulator')
 
+        self.check_service()
         self.init_sim_data()
         self.zabbix_active = ZabbixActive(self.server, self.active_data)
 
@@ -138,7 +141,18 @@ class ZabbixSim(tk.Tk):
         # create widget
         self.create_wigets()
 
-#        checks = active_checks("Zabbix server")
+    @classmethod
+    def check_service(cls):
+        """Check if zabbix-agent or zabbix-agent2 services are running"""
+        status = os.system('systemctl is-active --quiet zabbix-agent')
+        if status == 0:
+            print("zabbixsim can't start while zabbix-agent is running")
+            sys.exit()
+
+        status = os.system('systemctl is-active --quiet zabbix-agent2')
+        if status == 0:
+            print("zabbixsim can't start while zabbix-agent2 is running")
+            sys.exit()
 
     def init_sim_data(self):
         """Load the sim data and populate variables"""
@@ -332,18 +346,16 @@ class ZabbixSim(tk.Tk):
         # pylint: disable=no-self-use
         logging.info("Apply pressed")
 
-    def refresh_active_checks(self, *args):
+    def refresh_active_checks(self):
         """Refresh active checks"""
         logging.debug('refresh active checks')
-        for arg in args:
-            logging.info(arg)
         for hostname in self.active_data:
             self.zabbix_active.refresh_checks(hostname)
         self.after(ZABBIX_REFRESH_ACTIVE_CHECKS * 1000, self.refresh_active_checks)
 
     def send_active_data(self):
         """Send active data"""
-        logging.info('send active data')
+        logging.debug('send active data')
         for hostname, item_data in self.active_data.items():
             for item in item_data:
                 # Update the current delay, so data is sent after the proper delay
