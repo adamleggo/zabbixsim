@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Simulate a Zabbix active agent
+# Simulate a Zabbix active/passive agent
 #
 
 """System modules"""
@@ -40,7 +40,7 @@ class ZabbixActive():
         '''Send the message to the Zabbix server'''
         active_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         active_socket.connect((self.server, ZABBIX_ACTIVE_PORT))
-        logging.info('packet %s', data)
+        logging.debug('packet %s', data)
 
         # Generate the zabbix formatted message
         json_data = json.dumps(data, sort_keys=False)
@@ -56,7 +56,7 @@ class ZabbixActive():
         # Print the received message
         receive_message = packet_receive[13:]
         parsed = json.loads(receive_message)
-        logging.info(parsed["response"])
+        logging.debug(parsed["response"])
         return parsed
 
     def refresh_checks(self, host_check: str):
@@ -111,13 +111,19 @@ class ZabbixSim(tk.Tk):
     """ZabbixSim"""
 
     # pylint: disable=too-many-instance-attributes
+    # data structures
     active_data = {}
     passive_data = {}
+
+    # Lists for the menu options
     hostnames = []
     agent_types = []
     item_names = []
     item_keys = []
+
+    # Current values
     current_item = {}
+    current_type = ""
 
     zabbix_active = None
 
@@ -137,6 +143,7 @@ class ZabbixSim(tk.Tk):
         self.var_agent_type = tk.StringVar(self)
         self.var_item_name = tk.StringVar(self)
         self.var_item_key = tk.StringVar(self)
+        self.var_item_delay = tk.IntVar(self)
 
         # create widget
         self.create_wigets()
@@ -161,7 +168,6 @@ class ZabbixSim(tk.Tk):
         config = configparser.ConfigParser()
         default_config = "zabbixsim.cfg"
         logging.debug('ConfigPath = %s', default_config)
-        logging.basicConfig(level=logging.INFO)
 
         config.read(default_config)
 
@@ -189,48 +195,20 @@ class ZabbixSim(tk.Tk):
         for hostname in loaded_data:
             self.hostnames.append(hostname)
 
-        self.current_hostname = self.hostnames[0]
+        self.var_hostname = self.hostnames[0]
 
         # Load the agent types
-        for agent_type in loaded_data[self.current_hostname]:
+        for agent_type in loaded_data[self.var_hostname]:
             self.agent_types.append(agent_type)
 
         self.current_type = self.agent_types[0]
 
         # Load the items
-        for item in loaded_data[self.current_hostname][self.current_type]:
+        for item in loaded_data[self.var_hostname][self.current_type]:
             self.item_names.append(item['name'])
             self.item_keys.append(item['key_'])
 
-        self.current_item = loaded_data[self.current_hostname][self.current_type][0]
-        self.current_name = self.current_item['name']
-        self.current_key = self.current_item['key_']
-
-    def update_type_data(self):
-        """Update type data"""
-        self.item_names = []
-        self.item_keys = []
-
-    def update_item_data(self):
-        """Update item data"""
-        self.item_names = []
-        self.item_keys = []
-        #for type in self.sim_data[self.option_hostname.get()]:
-        #    logging.info(hostname)
-        #    self.hostnames.append(hostname)
-
-        #hostname_default = tk.StringVar(self)
-        #hostname_default.set(hostnames[0]) # default value
-
-        #for item in host_items[hostname]['active']:
-        #    logging.info(item)
-        #    logging.info(item['name'])
-        #    logging.info(item['key_'])
-        #    item_names.append(item['name'])
-        #    item_keys.append(item['key_'])
-
-        #self.item_name_default = tk.StringVar(self)
-        #self.item_name_default.set(item_names[0]) # default value
+        self.current_item = loaded_data[self.var_hostname][self.current_type][0]
 
     def create_wigets(self):
         # pylint: disable=too-many-locals
@@ -257,56 +235,57 @@ class ZabbixSim(tk.Tk):
         lbl_agent_type.grid(column=0, row=1, sticky=tk.W, **paddings)
 
         # menu agent type
-        mnu_agent_type = ttk.OptionMenu(
+        self.mnu_agent_type = ttk.OptionMenu(
             self,
             self.var_agent_type,
             self.agent_types[0],
             *self.agent_types,
             command=self.changed_agent_type)
-        mnu_agent_type.grid(column=1, row=1, sticky=tk.W, **paddings)
+        self.mnu_agent_type.grid(column=1, row=1, sticky=tk.W, **paddings)
 
         # label item name
         lbl_item_name = ttk.Label(self,  text='Item Name:')
         lbl_item_name.grid(column=0, row=2, sticky=tk.W, **paddings)
 
         # menu item name
-        mnu_item_name = ttk.OptionMenu(
+        self.mnu_item_name = ttk.OptionMenu(
             self,
             self.var_item_name,
             self.item_names[0],
             *self.item_names,
             command=self.changed_item_name)
-        mnu_item_name.grid(column=1, row=2, sticky=tk.W, **paddings)
+        self.mnu_item_name.grid(column=1, row=2, sticky=tk.W, **paddings)
 
         # label item key
         lbl_item_key = ttk.Label(self,  text='Item Key:')
         lbl_item_key.grid(column=0, row=3, sticky=tk.W, **paddings)
 
         # menu item name
-        mnu_item_key = ttk.OptionMenu(
+        self.mnu_item_key = ttk.OptionMenu(
             self,
             self.var_item_key,
             self.item_keys[0],
             *self.item_keys,
             command=self.changed_item_key)
-        mnu_item_key.grid(column=1, row=3, sticky=tk.W, **paddings)
+        self.mnu_item_key.grid(column=1, row=3, sticky=tk.W, **paddings)
 
         # label item delay
         lbl_item_delay = ttk.Label(self, text='Item Delay:')
         lbl_item_delay.grid(column=0, row=4, sticky=tk.W, **paddings)
 
         # value item delay
-        lbl_item_delay_value = ttk.Label(self, text=self.current_item['delay'])
-        lbl_item_delay_value.grid(column=1, row=4, sticky=tk.W, **paddings)
+        self.var_item_delay.set(self.current_item['delay'])
+        self.lbl_item_delay_value = ttk.Label(self, textvariable=self.var_item_delay)
+        self.lbl_item_delay_value.grid(column=1, row=4, sticky=tk.W, **paddings)
 
         # label item value
         lbl_item_value = ttk.Label(self,  text='Item Value:')
         lbl_item_value.grid(column=0, row=5, sticky=tk.W, **paddings)
 
         # value item delay
-        entry_item_value = ttk.Entry(self)
-        entry_item_value.insert(0, self.current_item['lastvalue'])
-        entry_item_value.grid(column=1, row=5, sticky=tk.W, **paddings)
+        self.entry_item_value = ttk.Entry(self)
+        self.entry_item_value.insert(0, self.current_item['lastvalue'])
+        self.entry_item_value.grid(column=1, row=5, sticky=tk.W, **paddings)
 
         # apply button
         btn_apply = ttk.Button(self, text='Apply', command=self.apply)
@@ -323,28 +302,90 @@ class ZabbixSim(tk.Tk):
 
     def changed_hostname(self, hostname):
         """hostname changed"""
-        # pylint: disable=no-self-use
-        logging.info(hostname)
+        logging.debug(hostname)
+        self.var_hostname.set(hostname)
+
+        self.current_type = self.agent_types[0]
+
+        # Load the items
+        if self.current_type == 'active':
+            for item in self.active_data[self.var_hostname]:
+                self.item_names.append(item['name'])
+                self.item_keys.append(item['key_'])
+            self.current_item = self.active_data[self.var_hostname][0]
+        elif self.current_type == 'passive':
+            for item in self.passive_data[self.var_hostname]:
+                self.item_names.append(item['name'])
+                self.item_keys.append(item['key_'])
+            self.current_item = self.passive_data[self.var_hostname][0]
+
+        self.changed_agent_type(self.current_type)
+
 
     def changed_agent_type(self, agent_type):
         """agent type changed"""
-        # pylint: disable=no-self-use
-        logging.info(agent_type)
+        logging.debug('changed_agent_type %s', agent_type)
+
+        # Load the items
+        hostname = self.var_hostname.get()
+        if self.current_type == 'active':
+            for item in self.active_data[hostname]:
+                self.item_names.append(item['name'])
+                self.item_keys.append(item['key_'])
+            self.current_item = self.active_data[hostname][0]
+        elif self.current_type == 'passive':
+            for item in self.passive_data[hostname]:
+                self.item_names.append(item['name'])
+                self.item_keys.append(item['key_'])
+            self.current_item = self.passive_data[hostname][0]
+
+        self.changed_item_name(self.current_item['name'])
+
+    def update_item_detail(self, item):
+        """Update the item details when new item selected"""
+        logging.debug('update_item_detail %s', str(item))
+        self.var_item_name.set(item['name'])
+        self.var_item_key.set(item['key_'])
+        self.var_item_delay.set(item['delay'])
+        self.entry_item_value.delete(0, tk.END)
+        self.entry_item_value.insert(0, item['lastvalue'])
+
 
     def changed_item_name(self, item_name):
         """item name changed"""
-        # pylint: disable=no-self-use
-        logging.info(item_name)
+        logging.debug('changed_item_name %s', item_name)
+
+        # Load the item details
+        hostname = self.var_hostname.get()
+        if self.current_type == 'active':
+            for item in self.active_data[hostname]:
+                if item_name == item['name']:
+                    self.update_item_detail(item)
+        elif self.current_type == 'passive':
+            for item in self.passive_data[hostname]:
+                if item_name == item['name']:
+                    self.update_item_detail(item)
 
     def changed_item_key(self, item_key):
         """item key changed"""
-        # pylint: disable=no-self-use
-        logging.info(item_key)
+        logging.debug('changed_item_key %s', item_key)
+        # Load the item details
+        hostname = self.var_hostname.get()
+        if self.current_type == 'active':
+            for item in self.active_data[hostname]:
+                if item_key == item['key_']:
+                    self.update_item_detail(item)
+        elif self.current_type == 'passive':
+            for item in self.passive_data[hostname]:
+                if item_key == item['key_']:
+                    self.update_item_detail(item)
 
     def apply(self):
         """Apply the change in value and send update"""
-        # pylint: disable=no-self-use
-        logging.info("Apply pressed")
+        self.current_item['lastvalue'] = self.entry_item_value.get()
+        self.current_item['current_delay'] = self.current_item['delay']
+        for hostname, item_data in self.active_data.items():
+            self.zabbix_active.agent_data(hostname, item_data)
 
     def refresh_active_checks(self):
         """Refresh active checks"""
