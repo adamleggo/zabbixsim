@@ -8,15 +8,9 @@
 
    Zabbix Agent Simulator is a tool that acts a Zabbix agent (passive and active)
 """
-import glob
-import os
-import sys
 import setuptools
 
-classifiers = """\
-"""
-
-with open("README.md", "r") as readme_file:
+with open("README.md", "r", encoding="utf8") as readme_file:
     readme = readme_file.read()
 
 requirements = ["zabbix-api>=0.5.4"]
@@ -52,4 +46,3 @@ setuptools.setup(
         "Topic :: System :: Networking :: Monitoring"
     ]
 )
-
