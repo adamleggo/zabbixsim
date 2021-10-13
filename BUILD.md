@@ -5,7 +5,7 @@ Zabbix Agent Simulator (active and passive)
 ## Setup
 
 ```bash
-yum install python3-tkinter python3-pyyaml
+sudo yum install python3-tkinter python3-pyyaml
 python3 -m venv zabbixsim
 source zabbixsim/bin/activate
 pip install -r requirements_dev.txt

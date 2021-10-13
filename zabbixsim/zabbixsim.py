@@ -409,7 +409,10 @@ class ZabbixSim(tk.Tk):
             self.zabbix_active.agent_data(hostname, item_data)
         self.after(ZABBIX_SEND_ACTIVE * 1000, self.send_active_data)
 
-
-if __name__ == "__main__":
+def main():
+    """Main for Zabbix Simulator"""
     zabbixsim = ZabbixSim()
     zabbixsim.mainloop()
+
+if __name__ == "__main__":
+    main()

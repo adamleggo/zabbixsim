@@ -1,4 +1,4 @@
-pip==21.2.4
+pip==21.3
 wheel==0.37.0
 twine==3.4.2
-pylint=2.11.1s
+pylint==2.11.1
