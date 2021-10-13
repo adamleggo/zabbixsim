@@ -1,1 +1,2 @@
 zabbix-api>=0.5.4
+pyyaml
