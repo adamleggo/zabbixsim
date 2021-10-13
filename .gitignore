@@ -134,3 +134,6 @@ dmypy.json
 
 # zabbixsim agent config
 *.yaml
+
+# vscode
+/.idea
