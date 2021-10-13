@@ -13,11 +13,9 @@ import setuptools
 with open("README.md", "r", encoding="utf8") as readme_file:
     readme = readme_file.read()
 
-requirements = ["zabbix-api>=0.5.4"]
-
 setuptools.setup(
     name='zabbixsim',
-    version='0.0.1',
+    version='0.1.0',
     author='Adam Leggo',
     author_email='adam@leggo.id.au',
     description='Zabbix Agent simulator',
@@ -26,9 +24,9 @@ setuptools.setup(
     url='https://github.com/adamleggo/zabbixsim',
     license='MIT',
     packages=setuptools.find_packages(),
-    include_requires=requirements,
+    install_requires=['zabbix-api>=0.5.4', 'pyyaml'],
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Environment :: Console",
         "Intended Audience :: Developers",
         "Intended Audience :: Information Technology",
