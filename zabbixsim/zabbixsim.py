@@ -8,6 +8,7 @@ import configparser
 import json
 import logging
 import os
+import glob
 import random
 import socket
 import struct
@@ -122,6 +123,7 @@ class ZabbixSim(tk.Tk):
     item_keys = []
 
     # Current values
+    current_hostname = ""
     current_item = {}
     current_type = ""
 
@@ -172,43 +174,50 @@ class ZabbixSim(tk.Tk):
         config.read(default_config)
 
         self.server = config.get('SETTINGS', 'server')
-        self.hostname = config.get('SETTINGS', 'hostname')
 
         # Load the recorded items as yaml
-        with open(self.hostname + '.yaml', encoding="utf8") as file:
-            loaded_data = yaml.load(file, Loader=yaml.Loader)
+        for filename in sorted(glob.glob("*.yaml")):
+            with open(os.path.join(os.getcwd(), filename), encoding="utf8") as file:
+                loaded_data = yaml.load(file, Loader=yaml.Loader)
 
-        # Add current_delay key to dictionary
-        for hostname in loaded_data:
-            if loaded_data[hostname]['active']:
-                self.active_data[hostname] = []
-                for item in loaded_data[hostname]['active']:
-                    item['current_delay'] = item['delay']
-                    self.active_data[hostname].append(item)
+                # Add current_delay key to dictionary
+                for hostname in loaded_data:
+                    if 'active' in loaded_data[hostname]:
+                        self.active_data[hostname] = []
+                        for item in loaded_data[hostname]['active']:
+                            item['current_delay'] = item['delay']
+                            self.active_data[hostname].append(item)
 
-            if loaded_data[hostname]['passive']:
-                self.passive_data[hostname] = []
-                for item in loaded_data[hostname]['passive']:
-                    self.passive_data[hostname].append(item)
+                    if 'passive' in loaded_data[hostname]:
+                        self.passive_data[hostname] = []
+                        for item in loaded_data[hostname]['passive']:
+                            self.passive_data[hostname].append(item)
 
-        # Load the hostnames
-        for hostname in loaded_data:
-            self.hostnames.append(hostname)
-
-        self.var_hostname = self.hostnames[0]
+                    # Load the hostnames
+                    self.hostnames.append(hostname)
 
         # Load the agent types
-        for agent_type in loaded_data[self.var_hostname]:
-            self.agent_types.append(agent_type)
+        self.current_hostname = self.hostnames[0]
+        self.agent_types = []
+        if self.current_hostname in self.active_data:
+            self.agent_types.append('active')
+        if self.current_hostname in self.passive_data:
+            self.agent_types.append('passive')
 
         self.current_type = self.agent_types[0]
 
-        # Load the items
-        for item in loaded_data[self.var_hostname][self.current_type]:
-            self.item_names.append(item['name'])
-            self.item_keys.append(item['key_'])
-
-        self.current_item = loaded_data[self.var_hostname][self.current_type][0]
+        self.item_names = []
+        self.item_keys = []
+        if self.current_type == 'active':
+            for item in self.active_data[hostname]:
+                self.item_names.append(item['name'])
+                self.item_keys.append(item['key_'])
+            self.current_item = self.active_data[hostname][0]
+        elif self.current_type == 'passive':
+            for item in loaded_data[self.hostnames[0]][self.current_type]:
+                self.item_names.append(item['name'])
+                self.item_keys.append(item['key_'])
+            self.current_item = self.passive_data[hostname][0]
 
     def create_wigets(self):
         # pylint: disable=too-many-locals
@@ -289,7 +298,7 @@ class ZabbixSim(tk.Tk):
 
         # apply button
         btn_apply = ttk.Button(self, text='Apply', command=self.apply)
-        btn_apply.grid(column=2, row=5, sticky=tk.W, **paddings)
+        btn_apply.grid(column=0, row=6, sticky=tk.W, **paddings)
 
         # refresh checks and send active data
         for hostname, data_items in self.active_data.items():
@@ -305,19 +314,22 @@ class ZabbixSim(tk.Tk):
         logging.debug(hostname)
         self.var_hostname.set(hostname)
 
-        self.current_type = self.agent_types[0]
+        # Delete the agent types
+        self.mnu_agent_type['menu'].delete(0, 'end')
 
-        # Load the items
-        if self.current_type == 'active':
-            for item in self.active_data[self.var_hostname]:
-                self.item_names.append(item['name'])
-                self.item_keys.append(item['key_'])
-            self.current_item = self.active_data[self.var_hostname][0]
-        elif self.current_type == 'passive':
-            for item in self.passive_data[self.var_hostname]:
-                self.item_names.append(item['name'])
-                self.item_keys.append(item['key_'])
-            self.current_item = self.passive_data[self.var_hostname][0]
+        # Load the agent types
+        self.current_hostname = hostname
+        self.agent_types = []
+        if self.current_hostname in self.active_data:
+            agent_type = 'active'
+            self.agent_types.append(agent_type)
+            self.mnu_agent_type['menu'].add_command(label=agent_type, command=tk._setit(self.var_agent_type, agent_type))
+        if self.current_hostname in self.passive_data:
+            agent_type = 'passive'
+            self.agent_types.append(agent_type)
+            self.mnu_agent_type['menu'].add_command(label=agent_type, command=tk._setit(self.var_agent_type, agent_type))
+
+        self.current_type = self.agent_types[0]
 
         self.changed_agent_type(self.current_type)
 
@@ -326,17 +338,27 @@ class ZabbixSim(tk.Tk):
         """agent type changed"""
         logging.debug('changed_agent_type %s', agent_type)
 
+        # Delete the names and keys from menu
+        self.mnu_item_name['menu'].delete(0, 'end')
+        self.mnu_item_key['menu'].delete(0, 'end')
+
         # Load the items
         hostname = self.var_hostname.get()
+        self.item_names = []
+        self.item_keys = []
         if self.current_type == 'active':
             for item in self.active_data[hostname]:
                 self.item_names.append(item['name'])
                 self.item_keys.append(item['key_'])
+                self.mnu_item_name['menu'].add_command(label=item['name'], command=tk._setit(self.var_item_name, item['name']))
+                self.mnu_item_key['menu'].add_command(label=item['key_'], command=tk._setit(self.var_item_key, item['key_']))
             self.current_item = self.active_data[hostname][0]
         elif self.current_type == 'passive':
             for item in self.passive_data[hostname]:
                 self.item_names.append(item['name'])
                 self.item_keys.append(item['key_'])
+                self.mnu_item_name['menu'].add_command(label=item['name'], command=tk._setit(self.var_item_name, item['name']))
+                self.mnu_item_key['menu'].add_command(label=item['key_'], command=tk._setit(self.var_item_key, item['key_']))
             self.current_item = self.passive_data[hostname][0]
 
         self.changed_item_name(self.current_item['name'])

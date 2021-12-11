@@ -54,7 +54,6 @@ class ConfigArgs():
         self.argvs_https = argvs.https
         self.argvs_username = argvs.username
         self.argvs_password = argvs.password
-        self.argvs_hostname = argvs.hostname
 
 class ConfigFile():
     """ Load config from file """
@@ -66,7 +65,6 @@ class ConfigFile():
         self.cfg_https = config_file.getboolean('SETTINGS', 'https')
         self.cfg_username = config_file.get('SETTINGS', 'username')
         self.cfg_password = config_file.get('SETTINGS', 'password')
-        self.cfg_hostname = config_file.get('SETTINGS', 'hostname')
 
 
 class Config():
@@ -87,8 +85,6 @@ class Config():
                             if self.config_args.argvs_username else self.config_file.cfg_username
         self.password = self.config_args.argvs_password \
                             if self.config_args.argvs_password else self.config_file.cfg_password
-        self.hostname = self.config_args.argvs_hostname \
-                            if self.config_args.argvs_hostname else self.config_file.cfg_hostname
 
 DEFAULTS = 'zabbixsim.cfg'
 
@@ -103,11 +99,12 @@ def main():
         zapi = zabbix_api.ZabbixAPI(server="http://" + config.server + "/zabbix")
     zapi.login(config.username, config.password)
 
-    # Get the host
-    host = zapi.host.get({ "filter": { "host": [ config.hostname ] } })
+    # Get all the hosts
+    hosts = zapi.host.get({"output": "extend"})
 
-    if host[0]:
-        hostid = host[0]['hostid']
+    for host in hosts:
+        hostid = host['hostid']
+        hostname = host['host']
 
         # Get the host items
         # 7 - Zabbix agent (active);
@@ -145,18 +142,19 @@ def main():
         if len(active_items) and len(passive_items):
             host_items_type['passive'] = passive_items
             host_items_type['active'] = active_items
-            host_items[config.hostname] = host_items_type
+            host_items[hostname] = host_items_type
         elif len(passive_items):
             host_items_type['passive'] = passive_items
-            host_items[config.hostname] = host_items_type
+            host_items[hostname] = host_items_type
         elif len(active_items):
             host_items_type['active'] = active_items
-            host_items[config.hostname] = host_items_type
+            host_items[hostname] = host_items_type
 
         # Dump the recorded items as yaml
-        output = yaml.dump(host_items, Dumper=yaml.Dumper)
-        with open(config.hostname + '.yaml', 'w', encoding="utf8") as writer:
-            writer.write(output)
+        if len(active_items) > 0 or len(passive_items) > 0:
+            output = yaml.dump(host_items, Dumper=yaml.Dumper)
+            with open(hostname + '.yaml', 'w', encoding="utf8") as writer:
+                writer.write(output)
 
     zapi.logout()
 
