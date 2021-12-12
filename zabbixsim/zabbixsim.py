@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Simulate a Zabbix active/passive agent
+# Simulate a Zabbix active agent
 #
 
 """System modules"""
@@ -104,6 +104,7 @@ class ZabbixActive():
             logging.debug(received_data["info"])
             self.session_num += 1
 
+# TODO
 #class ZabbixPassive():
 #    def __init__(self):
 #        logging.info("ZabbixPassive")

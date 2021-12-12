@@ -6,7 +6,7 @@
 #
 """Zabbix Agent simulator
 
-   Zabbix Agent Simulator is a tool that acts a Zabbix agent (passive and active)
+   Zabbix Agent Simulator is a tool that acts a Zabbix agent (active)
 """
 import setuptools
 
@@ -15,7 +15,7 @@ with open("README.md", "r", encoding="utf8") as readme_file:
 
 setuptools.setup(
     name='zabbixsim',
-    version='0.2.0',
+    version='0.2.1',
     author='Adam Leggo',
     author_email='adam@leggo.id.au',
     description='Zabbix Agent simulator',
