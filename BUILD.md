@@ -1,6 +1,6 @@
 # zabbixsim
 
-Zabbix Agent Simulator (active and passive)
+Zabbix Agent Simulator (active)
 
 ## Setup
 
