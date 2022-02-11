@@ -15,7 +15,7 @@ with open("README.md", "r", encoding="utf8") as readme_file:
 
 setuptools.setup(
     name='zabbixsim',
-    version='0.2.1',
+    version='0.3.0',
     author='Adam Leggo',
     author_email='adam@leggo.id.au',
     description='Zabbix Agent simulator',

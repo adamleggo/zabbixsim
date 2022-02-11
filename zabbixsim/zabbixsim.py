@@ -133,7 +133,7 @@ class ZabbixSim(tk.Tk):
     def __init__(self):
         """ZabbixSim init"""
         super().__init__()
-        self.geometry("400x250")
+        self.geometry("600x250")
         self.title('Zabbix Agent Simulator')
 
         self.check_service()
@@ -210,15 +210,15 @@ class ZabbixSim(tk.Tk):
         self.item_names = []
         self.item_keys = []
         if self.current_type == 'active':
-            for item in self.active_data[hostname]:
+            for item in self.active_data[self.current_hostname]:
                 self.item_names.append(item['name'])
                 self.item_keys.append(item['key_'])
-            self.current_item = self.active_data[hostname][0]
+            self.current_item = self.active_data[self.current_hostname][0]
         elif self.current_type == 'passive':
-            for item in loaded_data[self.hostnames[0]][self.current_type]:
+            for item in loaded_data[self.current_hostname][self.current_type]:
                 self.item_names.append(item['name'])
                 self.item_keys.append(item['key_'])
-            self.current_item = self.passive_data[hostname][0]
+            self.current_item = self.passive_data[self.current_hostname][0]
 
     def create_wigets(self):
         # pylint: disable=too-many-locals
@@ -232,52 +232,60 @@ class ZabbixSim(tk.Tk):
         lbl_hostname.grid(column=0, row=0, sticky=tk.W, **paddings)
 
         # menu hostname
-        mnu_hostname = ttk.OptionMenu(
+        self.mnu_hostname = ttk.Combobox(
             self,
-            self.var_hostname,
-            self.hostnames[0],
-            *self.hostnames,
-            command=self.changed_hostname)
-        mnu_hostname.grid(column=1, row=0, sticky=tk.W, **paddings)
+            textvariable=self.var_hostname,
+            state="readonly",
+            width=50)
+        self.mnu_hostname.grid(column=1, row=0, sticky=tk.W, **paddings)
+        self.mnu_hostname['values'] = tuple(self.hostnames)
+        self.mnu_hostname.current(0)
+        self.mnu_hostname.bind('<<ComboboxSelected>>', self.changed_hostname)
 
         # label agent type
         lbl_agent_type = ttk.Label(self,  text='Agent Type:')
         lbl_agent_type.grid(column=0, row=1, sticky=tk.W, **paddings)
 
         # menu agent type
-        self.mnu_agent_type = ttk.OptionMenu(
+        self.mnu_agent_type = ttk.Combobox(
             self,
-            self.var_agent_type,
-            self.agent_types[0],
-            *self.agent_types,
-            command=self.changed_agent_type)
+            textvariable=self.var_agent_type,
+            state="readonly",
+            width=50)
         self.mnu_agent_type.grid(column=1, row=1, sticky=tk.W, **paddings)
+        self.mnu_agent_type['values'] = tuple(self.agent_types)
+        self.mnu_agent_type.current(0)
+        self.mnu_agent_type.bind('<<ComboboxSelected>>', self.changed_agent_type)
 
         # label item name
         lbl_item_name = ttk.Label(self,  text='Item Name:')
         lbl_item_name.grid(column=0, row=2, sticky=tk.W, **paddings)
 
         # menu item name
-        self.mnu_item_name = ttk.OptionMenu(
+        self.mnu_item_name = ttk.Combobox(
             self,
-            self.var_item_name,
-            self.item_names[0],
-            *self.item_names,
-            command=self.changed_item_name)
+            textvariable=self.var_item_name,
+            state="readonly",
+            width=50)
         self.mnu_item_name.grid(column=1, row=2, sticky=tk.W, **paddings)
+        self.mnu_item_name['values'] = tuple(self.item_names)
+        self.mnu_item_name.current(0)
+        self.mnu_item_name.bind('<<ComboboxSelected>>', self.changed_item_name)
 
         # label item key
         lbl_item_key = ttk.Label(self,  text='Item Key:')
         lbl_item_key.grid(column=0, row=3, sticky=tk.W, **paddings)
 
-        # menu item name
-        self.mnu_item_key = ttk.OptionMenu(
+        # menu item key
+        self.mnu_item_key = ttk.Combobox(
             self,
-            self.var_item_key,
-            self.item_keys[0],
-            *self.item_keys,
-            command=self.changed_item_key)
+            textvariable=self.var_item_key,
+            state="readonly",
+            width=50)
         self.mnu_item_key.grid(column=1, row=3, sticky=tk.W, **paddings)
+        self.mnu_item_key['values'] = tuple(self.item_keys)
+        self.mnu_item_key.current(0)
+        self.mnu_item_key.bind('<<ComboboxSelected>>', self.changed_item_key)
 
         # label item delay
         lbl_item_delay = ttk.Label(self, text='Item Delay:')
@@ -310,13 +318,11 @@ class ZabbixSim(tk.Tk):
         self.after(ZABBIX_REFRESH_ACTIVE_CHECKS * 1000, self.refresh_active_checks)
         self.after(ZABBIX_SEND_ACTIVE * 1000, self.send_active_data)
 
-    def changed_hostname(self, hostname):
+    def changed_hostname(self, event):
         """hostname changed"""
+        hostname= event.widget.get()
         logging.debug(hostname)
         self.var_hostname.set(hostname)
-
-        # Delete the agent types
-        self.mnu_agent_type['menu'].delete(0, 'end')
 
         # Load the agent types
         self.current_hostname = hostname
@@ -324,24 +330,23 @@ class ZabbixSim(tk.Tk):
         if self.current_hostname in self.active_data:
             agent_type = 'active'
             self.agent_types.append(agent_type)
-            self.mnu_agent_type['menu'].add_command(label=agent_type, command=tk._setit(self.var_agent_type, agent_type))
         if self.current_hostname in self.passive_data:
             agent_type = 'passive'
             self.agent_types.append(agent_type)
-            self.mnu_agent_type['menu'].add_command(label=agent_type, command=tk._setit(self.var_agent_type, agent_type))
 
+        self.mnu_agent_type['values'] = tuple(self.agent_types)
         self.current_type = self.agent_types[0]
 
-        self.changed_agent_type(self.current_type)
+        self.set_agent_type(self.current_type)
 
 
-    def changed_agent_type(self, agent_type):
+    def changed_agent_type(self, event):
         """agent type changed"""
-        logging.debug('changed_agent_type %s', agent_type)
+        self.set_agent_type(event.widget.get())
 
-        # Delete the names and keys from menu
-        self.mnu_item_name['menu'].delete(0, 'end')
-        self.mnu_item_key['menu'].delete(0, 'end')
+    def set_agent_type(self, agent_type):
+        """set agent type"""
+        logging.debug('changed_agent_type %s', agent_type)
 
         # Load the items
         hostname = self.var_hostname.get()
@@ -351,18 +356,16 @@ class ZabbixSim(tk.Tk):
             for item in self.active_data[hostname]:
                 self.item_names.append(item['name'])
                 self.item_keys.append(item['key_'])
-                self.mnu_item_name['menu'].add_command(label=item['name'], command=tk._setit(self.var_item_name, item['name']))
-                self.mnu_item_key['menu'].add_command(label=item['key_'], command=tk._setit(self.var_item_key, item['key_']))
             self.current_item = self.active_data[hostname][0]
         elif self.current_type == 'passive':
             for item in self.passive_data[hostname]:
                 self.item_names.append(item['name'])
                 self.item_keys.append(item['key_'])
-                self.mnu_item_name['menu'].add_command(label=item['name'], command=tk._setit(self.var_item_name, item['name']))
-                self.mnu_item_key['menu'].add_command(label=item['key_'], command=tk._setit(self.var_item_key, item['key_']))
             self.current_item = self.passive_data[hostname][0]
 
-        self.changed_item_name(self.current_item['name'])
+        self.mnu_item_name['values'] = tuple(self.item_names)
+        self.mnu_item_key['values'] = tuple(self.item_keys)
+        self.set_item_name(self.current_item['name'])
 
     def update_item_detail(self, item):
         """Update the item details when new item selected"""
@@ -372,11 +375,16 @@ class ZabbixSim(tk.Tk):
         self.var_item_delay.set(item['delay'])
         self.entry_item_value.delete(0, tk.END)
         self.entry_item_value.insert(0, item['lastvalue'])
+        self.current_item = item
 
 
-    def changed_item_name(self, item_name):
+    def changed_item_name(self, event):
         """item name changed"""
-        logging.debug('changed_item_name %s', item_name)
+        self.set_item_name(event.widget.get())
+
+    def set_item_name(self, item_name):
+        """item name set"""
+        logging.debug('set_item_name %s', item_name)
 
         # Load the item details
         hostname = self.var_hostname.get()
@@ -389,8 +397,12 @@ class ZabbixSim(tk.Tk):
                 if item_name == item['name']:
                     self.update_item_detail(item)
 
-    def changed_item_key(self, item_key):
+    def changed_item_key(self, event):
         """item key changed"""
+        self.set_item_key(event.widget.get())
+
+    def set_item_key(self, item_key):
+        """item key set"""
         logging.debug('changed_item_key %s', item_key)
         # Load the item details
         hostname = self.var_hostname.get()
